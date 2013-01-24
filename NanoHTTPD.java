@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URLEncoder;
@@ -216,11 +217,12 @@ public class NanoHTTPD
 	 * Starts a HTTP server to given port.<p>
 	 * Throws an IOException if the socket is already in use
 	 */
-	public NanoHTTPD( int port, File wwwroot ) throws IOException
+	public NanoHTTPD( String hostname, int port, File wwwroot ) throws IOException
 	{
 		myTcpPort = port;
 		this.myRootDir = wwwroot;
-		myServerSocket = new ServerSocket( myTcpPort );
+		myServerSocket = new ServerSocket();
+		myServerSocket.bind(new InetSocketAddress(hostname, port));
 		myThread = new Thread( new Runnable()
 			{
 				public void run()
@@ -263,11 +265,14 @@ public class NanoHTTPD
 
 		// Defaults
 		int port = 80;
+		String hostname = "127.0.0.1";
 		File wwwroot = new File(".").getAbsoluteFile();
 
 		// Show licence if requested
 		for ( int i=0; i<args.length; ++i )
-		if(args[i].equalsIgnoreCase("-p"))
+		if(args[i].equalsIgnoreCase("-h"))
+			hostname = args[i+1];
+		else if(args[i].equalsIgnoreCase("-p"))
 			port = Integer.parseInt( args[i+1] );
 		else if(args[i].equalsIgnoreCase("-d"))
 			wwwroot = new File( args[i+1] ).getAbsoluteFile();
@@ -279,7 +284,7 @@ public class NanoHTTPD
 
 		try
 		{
-			new NanoHTTPD( port, wwwroot );
+			new NanoHTTPD( hostname, port, wwwroot );
 		}
 		catch( IOException ioe )
 		{
