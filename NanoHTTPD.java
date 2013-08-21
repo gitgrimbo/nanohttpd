@@ -1,8 +1,10 @@
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -13,17 +15,16 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Enumeration;
-import java.util.Vector;
 import java.util.Hashtable;
+import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.StringTokenizer;
 import java.util.TimeZone;
-
-import java.io.ByteArrayOutputStream;
-import java.io.FileOutputStream;
+import java.util.Vector;
 
 /**
  * A simple, tiny, nicely embeddable HTTP 1.0 (partially 1.1) server in Java
@@ -122,7 +123,7 @@ public class NanoHTTPD {
 					+ files.getProperty(value) + "'");
 		}
 
-		return serveFile(uri, header, myRootDir, true);
+		return serveFile(uri, header, myRootDirs, true);
 	}
 
 	/**
@@ -216,10 +217,10 @@ public class NanoHTTPD {
 	 * <p>
 	 * Throws an IOException if the socket is already in use
 	 */
-	public NanoHTTPD(String hostname, int port, File wwwroot)
+	public NanoHTTPD(String hostname, int port, List<File> wwwroots)
 			throws IOException {
 		myTcpPort = port;
-		this.myRootDir = wwwroot;
+		this.myRootDirs = wwwroots;
 		myServerSocket = new ServerSocket();
 		myServerSocket.bind(new InetSocketAddress(hostname, port));
 		myThread = new Thread(new Runnable() {
@@ -257,30 +258,36 @@ public class NanoHTTPD {
 		// Defaults
 		int port = 80;
 		String hostname = "127.0.0.1";
-		File wwwroot = new File(".").getAbsoluteFile();
+		List<File> wwwroots = new ArrayList<File>();
 
 		// Show licence if requested
-		for (int i = 0; i < args.length; ++i)
+		for (int i = 0; i < args.length; ++i) {
 			if (args[i].equalsIgnoreCase("-h"))
 				hostname = args[i + 1];
 			else if (args[i].equalsIgnoreCase("-p"))
 				port = Integer.parseInt(args[i + 1]);
 			else if (args[i].equalsIgnoreCase("-d"))
-				wwwroot = new File(args[i + 1]).getAbsoluteFile();
+				wwwroots.add(new File(args[i + 1]).getAbsoluteFile());
 			else if (args[i].toLowerCase().endsWith("licence")) {
 				myOut.println(LICENCE + "\n");
 				break;
 			}
+		}
+
+		if (wwwroots.isEmpty()) {
+			File thisDirectory = new File(".").getAbsoluteFile();
+			wwwroots.add(thisDirectory);
+		}
 
 		try {
-			new NanoHTTPD(hostname, port, wwwroot);
+			new NanoHTTPD(hostname, port, wwwroots);
 		} catch (IOException ioe) {
 			myErr.println("Couldn't start server:\n" + ioe);
 			System.exit(-1);
 		}
 
 		myOut.println("Now serving files in port " + port + " from \""
-				+ wwwroot + "\"");
+				+ wwwroots + "\"");
 		myOut.println("Hit Enter to stop.\n");
 
 		try {
@@ -835,7 +842,7 @@ public class NanoHTTPD {
 	private int myTcpPort;
 	private final ServerSocket myServerSocket;
 	private Thread myThread;
-	private File myRootDir;
+	private List<File> myRootDirs;
 
 	// ==================================================
 	// File server code
@@ -845,45 +852,53 @@ public class NanoHTTPD {
 	 * Serves file from homeDir and its' subdirectories (only). Uses only URI,
 	 * ignores all headers and HTTP parameters.
 	 */
-	public Response serveFile(String uri, Properties header, File homeDir,
-			boolean allowDirectoryListing) {
+	public Response serveFile(String uri, Properties header,
+			List<File> homeDirs, boolean allowDirectoryListing) {
 		Response res = null;
 
-		// Make sure we won't die of an exception later
-		if (!homeDir.isDirectory())
-			res = new Response(HTTP_INTERNALERROR, MIME_PLAINTEXT,
-					"INTERNAL ERRROR: serveFile(): given homeDir is not a directory.");
+		for (File homeDir : homeDirs) {
+			// Make sure we won't die of an exception later
+			if (!homeDir.isDirectory())
+				res = new Response(HTTP_INTERNALERROR, MIME_PLAINTEXT,
+						"INTERNAL ERRROR: serveFile(): given homeDir is not a directory.");
 
-		if (res == null) {
-			// Remove URL arguments
-			uri = uri.trim().replace(File.separatorChar, '/');
-			if (uri.indexOf('?') >= 0)
-				uri = uri.substring(0, uri.indexOf('?'));
+			if (res == null) {
+				// Remove URL arguments
+				uri = uri.trim().replace(File.separatorChar, '/');
+				if (uri.indexOf('?') >= 0)
+					uri = uri.substring(0, uri.indexOf('?'));
 
-			// Prohibit getting out of current directory
-			if (uri.startsWith("..") || uri.endsWith("..")
-					|| uri.indexOf("../") >= 0)
+				// Prohibit getting out of current directory
+				if (uri.startsWith("..") || uri.endsWith("..")
+						|| uri.indexOf("../") >= 0)
+					res = new Response(HTTP_FORBIDDEN, MIME_PLAINTEXT,
+							"FORBIDDEN: Won't serve ../ for security reasons.");
+			}
+
+			File f = new File(homeDir, uri);
+			if (res == null && !f.exists()) {
+				continue;
+			}
+
+			// List the directory, if necessary
+			if (res == null && f.isDirectory()) {
+				res = serveSingleDirectory(uri, homeDir, f,
+						allowDirectoryListing);
+			}
+
+			try {
+				if (res == null) {
+					res = serveSingleFile(header, f);
+				}
+			} catch (IOException ioe) {
 				res = new Response(HTTP_FORBIDDEN, MIME_PLAINTEXT,
-						"FORBIDDEN: Won't serve ../ for security reasons.");
+						"FORBIDDEN: Reading file failed.");
+			}
 		}
 
-		File f = new File(homeDir, uri);
-		if (res == null && !f.exists())
+		if (null == res) {
 			res = new Response(HTTP_NOTFOUND, MIME_PLAINTEXT,
 					"Error 404, file not found.");
-
-		// List the directory, if necessary
-		if (res == null && f.isDirectory()) {
-			res = serveSingleDirectory(uri, homeDir, f, allowDirectoryListing);
-		}
-
-		try {
-			if (res == null) {
-				res = serveSingleFile(header, f);
-			}
-		} catch (IOException ioe) {
-			res = new Response(HTTP_FORBIDDEN, MIME_PLAINTEXT,
-					"FORBIDDEN: Reading file failed.");
 		}
 
 		res.addHeader("Accept-Ranges", "bytes"); // Announce that the file
