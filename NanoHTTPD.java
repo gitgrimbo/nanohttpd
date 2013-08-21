@@ -253,7 +253,7 @@ public class NanoHTTPD {
 	 */
 	public static void main(String[] args) {
 		myOut.println("NanoHTTPD 1.25 (C) 2001,2005-2011 Jarno Elonen and (C) 2010 Konstantinos Togias\n"
-				+ "(Command line options: [-p port] [-d root-dir] [--licence])\n");
+				+ "(Command line options: [-p port] [-d root-dir]* [--licence])\n");
 
 		// Defaults
 		int port = 80;
