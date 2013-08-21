@@ -307,40 +307,46 @@ public class SimpleWebServer extends NanoHTTPD {
         }));
         Collections.sort(directories);
         if (up != null || directories.size() + files.size() > 0) {
-            msg += "<ul>";
-            if (up != null || directories.size() > 0) {
-                msg += "<section class=\"directories\">";
-                if (up != null) {
-                    msg += "<li><a rel=\"directory\" href=\"" + up + "\"><span class=\"dirname\">..</span></a></b></li>";
-                }
-                for (int i = 0; i < directories.size(); i++) {
-                    String dir = directories.get(i) + "/";
-                    msg += "<li><a rel=\"directory\" href=\"" + encodeUri(uri + dir) + "\"><span class=\"dirname\">" + dir + "</span></a></b></li>";
-                }
-                msg += "</section>";
-            }
-            if (files.size() > 0) {
-                msg += "<section class=\"files\">";
-                for (int i = 0; i < files.size(); i++) {
-                    String file = files.get(i);
-
-                    msg += "<li><a href=\"" + encodeUri(uri + file) + "\"><span class=\"filename\">" + file + "</span></a>";
-                    File curFile = new File(f, file);
-                    long len = curFile.length();
-                    msg += "&nbsp;<span class=\"filesize\">(";
-                    if (len < 1024)
-                        msg += len + " bytes";
-                    else if (len < 1024 * 1024)
-                        msg += len / 1024 + "." + (len % 1024 / 10 % 100) + " KB";
-                    else
-                        msg += len / (1024 * 1024) + "." + len % (1024 * 1024) / 10 % 100 + " MB";
-                    msg += ")</span></li>";
-                }
-                msg += "</section>";
-            }
-            msg += "</ul>";
+            msg = appendDirectoryListing(msg, uri, f, up, files, directories);
         }
         msg += "</body></html>";
+        return msg;
+    }
+
+    private String appendDirectoryListing(String msg, String uri, File f, String up,
+            List<String> files, List<String> directories) {
+        msg += "<ul>";
+        if (up != null || directories.size() > 0) {
+            msg += "<section class=\"directories\">";
+            if (up != null) {
+                msg += "<li><a rel=\"directory\" href=\"" + up + "\"><span class=\"dirname\">..</span></a></b></li>";
+            }
+            for (int i = 0; i < directories.size(); i++) {
+                String dir = directories.get(i) + "/";
+                msg += "<li><a rel=\"directory\" href=\"" + encodeUri(uri + dir) + "\"><span class=\"dirname\">" + dir + "</span></a></b></li>";
+            }
+            msg += "</section>";
+        }
+        if (files.size() > 0) {
+            msg += "<section class=\"files\">";
+            for (int i = 0; i < files.size(); i++) {
+                String file = files.get(i);
+
+                msg += "<li><a href=\"" + encodeUri(uri + file) + "\"><span class=\"filename\">" + file + "</span></a>";
+                File curFile = new File(f, file);
+                long len = curFile.length();
+                msg += "&nbsp;<span class=\"filesize\">(";
+                if (len < 1024)
+                    msg += len + " bytes";
+                else if (len < 1024 * 1024)
+                    msg += len / 1024 + "." + (len % 1024 / 10 % 100) + " KB";
+                else
+                    msg += len / (1024 * 1024) + "." + len % (1024 * 1024) / 10 % 100 + " MB";
+                msg += ")</span></li>";
+            }
+            msg += "</section>";
+        }
+        msg += "</ul>";
         return msg;
     }
 
