@@ -857,10 +857,15 @@ public class NanoHTTPD {
 		Response res = null;
 
 		for (File homeDir : homeDirs) {
+			if (null != res) {
+				break;
+			}
+
 			// Make sure we won't die of an exception later
-			if (!homeDir.isDirectory())
+			if (!homeDir.isDirectory()) {
 				res = new Response(HTTP_INTERNALERROR, MIME_PLAINTEXT,
 						"INTERNAL ERRROR: serveFile(): given homeDir is not a directory.");
+			}
 
 			if (res == null) {
 				// Remove URL arguments
@@ -901,9 +906,9 @@ public class NanoHTTPD {
 					"Error 404, file not found.");
 		}
 
-		res.addHeader("Accept-Ranges", "bytes"); // Announce that the file
-													// server accepts partial
-													// content requestes
+		// Announce that the file server accepts partial content requestes
+		res.addHeader("Accept-Ranges", "bytes");
+
 		return res;
 	}
 
@@ -971,11 +976,11 @@ public class NanoHTTPD {
 					if (len < 1024)
 						msg += len + " bytes";
 					else if (len < 1024 * 1024)
-						msg += len / 1024 + "."
-								+ (len % 1024 / 10 % 100) + " KB";
+						msg += len / 1024 + "." + (len % 1024 / 10 % 100)
+								+ " KB";
 					else
-						msg += len / (1024 * 1024) + "." + len
-								% (1024 * 1024) / 10 % 100 + " MB";
+						msg += len / (1024 * 1024) + "." + len % (1024 * 1024)
+								/ 10 % 100 + " MB";
 
 					msg += ")</font>";
 				}
