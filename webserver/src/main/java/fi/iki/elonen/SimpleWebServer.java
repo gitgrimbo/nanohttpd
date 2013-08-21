@@ -292,25 +292,34 @@ public class SimpleWebServer extends NanoHTTPD {
             }
         }
 
-        List<String> files = Arrays.asList(f.list(new FilenameFilter() {
-            @Override
-            public boolean accept(File dir, String name) {
-                return new File(dir, name).isFile();
-            }
-        }));
+        List<String> files = collectFiles(f);
         Collections.sort(files);
-        List<String> directories = Arrays.asList(f.list(new FilenameFilter() {
-            @Override
-            public boolean accept(File dir, String name) {
-                return new File (dir, name).isDirectory();
-            }
-        }));
+        List<String> directories = collectDirectories(f);
         Collections.sort(directories);
+
         if (up != null || directories.size() + files.size() > 0) {
             msg = appendDirectoryListing(msg, uri, f, up, files, directories);
         }
         msg += "</body></html>";
         return msg;
+    }
+
+    private List<String> collectFiles(File f) {
+        return collectFiles(f, false);
+    }
+
+    private List<String> collectDirectories(File f) {
+        return collectFiles(f, true);
+    }
+
+    private List<String> collectFiles(File f, final boolean isDirectory) {
+        return Arrays.asList(f.list(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                File f = new File(dir, name);
+                return isDirectory ? f.isDirectory() : f.isFile();
+            }
+        }));
     }
 
     private String appendDirectoryListing(String msg, String uri, File f, String up,
