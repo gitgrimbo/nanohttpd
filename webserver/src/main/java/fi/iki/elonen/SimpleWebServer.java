@@ -4,6 +4,8 @@ import java.io.*;
 import java.net.URLEncoder;
 import java.util.*;
 
+import fi.iki.elonen.NanoHTTPD.Response.Status;
+
 public class SimpleWebServer extends NanoHTTPD {
     /**
      * Hashtable mapping (String)FILENAME_EXTENSION -> (String)MIME_TYPE
@@ -65,17 +67,29 @@ public class SimpleWebServer extends NanoHTTPD {
                     + "(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\n"
                     + "OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.";
 
-    private final File rootDir;
+    private final List<File> rootDirs;
     private final boolean quiet;
 
     public SimpleWebServer(String host, int port, File wwwroot, boolean quiet) {
         super(host, port);
-        this.rootDir = wwwroot;
+        List<File> rootDirs = new ArrayList<File>();
+        rootDirs.add(wwwroot);
+        this.rootDirs = rootDirs;
+        this.quiet = quiet;
+    }
+
+    public SimpleWebServer(String host, int port, List<File> wwwroots, boolean quiet) {
+        super(host, port);
+        this.rootDirs = wwwroots;
         this.quiet = quiet;
     }
 
     File getRootDir() {
-        return rootDir;
+        return rootDirs.get(0);
+    }
+
+    List<File> getRootDirs() {
+        return rootDirs;
     }
 
     /**
@@ -98,6 +112,24 @@ public class SimpleWebServer extends NanoHTTPD {
             }
         }
         return newUri;
+    }
+
+    /**
+     * Serves file from the first homeDir that can return a Response. Uses only URI, ignores all headers and HTTP parameters.
+     */
+    Response serveFile(String uri, Map<String, String> header, List<File> homeDirs) {
+        Response res = null;
+
+        for (File homeDir: homeDirs) {
+            res = serveFile(uri, header, homeDir);
+            if (Status.NOT_FOUND.getRequestStatus() != res.getStatus().getRequestStatus()) {
+                // If the resource is NOT_FOUND, we try the next homeDir.
+                // Otherwise we return the found response here.
+                return res;
+            }
+        }
+
+        return res;
     }
 
     /**
@@ -155,7 +187,7 @@ public class SimpleWebServer extends NanoHTTPD {
 
         try {
             if (res == null) {
-                serveSingleFile(header, f);
+                res = serveSingleFile(header, f);
             }
         } catch (IOException ioe) {
             res = new Response(Response.Status.FORBIDDEN, NanoHTTPD.MIME_PLAINTEXT, "FORBIDDEN: Reading file failed.");
@@ -333,7 +365,7 @@ public class SimpleWebServer extends NanoHTTPD {
                 System.out.println("  UPLOADED: '" + value + "' = '" + files.get(value) + "'");
             }
         }
-        return serveFile(uri, header, getRootDir());
+        return serveFile(uri, header, getRootDirs());
     }
 
     /**
@@ -344,7 +376,8 @@ public class SimpleWebServer extends NanoHTTPD {
         int port = 8080;
 
         String host = "127.0.0.1";
-        File wwwroot = new File(".").getAbsoluteFile();
+        File thisDirectory = new File(".").getAbsoluteFile();
+        List<File> wwwroots = new ArrayList<File>();
         boolean quiet = false;
 
         // Parse command-line, with short and long versions of the options.
@@ -356,13 +389,17 @@ public class SimpleWebServer extends NanoHTTPD {
             } else if (args[i].equalsIgnoreCase("-q") || args[i].equalsIgnoreCase("--quiet")) {
                 quiet = true;
             } else if (args[i].equalsIgnoreCase("-d") || args[i].equalsIgnoreCase("--dir")) {
-                wwwroot = new File(args[i + 1]).getAbsoluteFile();
+                wwwroots.add(new File(args[i + 1]).getAbsoluteFile());
             } else if (args[i].equalsIgnoreCase("--licence")) {
                 System.out.println(LICENCE + "\n");
                 break;
             }
         }
 
-        ServerRunner.executeInstance(new SimpleWebServer(host, port, wwwroot, quiet));
+        if (wwwroots.isEmpty()) {
+            wwwroots.add(thisDirectory);
+        }
+
+        ServerRunner.executeInstance(new SimpleWebServer(host, port, wwwroots, quiet));
     }
 }
